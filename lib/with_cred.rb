@@ -5,9 +5,6 @@ class CredentialsNotFoundError < StandardError ; end
 
 module WithCred
 
-  def self.credentials_dir
-    @@credentials_dir
-  end
   def self.credentials_dir=(foo)
     @@credentials_dir = foo
   end
@@ -17,13 +14,17 @@ module WithCred
       ::Rails.application.config.credentials_mode
     end
 
-    @@credentials_dir = ::Rails.root
+    def self.credentials_dir
+      @@credentials_dir ||= ::Rails.root
+    end
   else
     def self.credentials_mode
       "production"
     end
 
-    @@credentials_dir = ENV["PWD"]
+    def self.credentials_dir
+      @@credentials_dir ||= @@credentials_dir = ENV["PWD"]
+    end
   end
 
   def self.entials_for(file)
