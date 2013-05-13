@@ -1,4 +1,5 @@
 require "with_cred/version"
+require "with_cred/railtie" if defined?(::Rails)
 
 class CredentialsNotFoundError < StandardError ; end
 
@@ -11,12 +12,12 @@ module WithCred
     @@credentials_dir = foo
   end
 
-  if defined?(Rails)
+  if defined?(::Rails)
     def self.credentials_mode
-      Rails.application.config.credentials_mode
+      ::Rails.application.config.credentials_mode
     end
 
-    @@credentials_dir = Rails.root
+    @@credentials_dir = ::Rails.root
   else
     def self.credentials_mode
       "production"
@@ -28,7 +29,7 @@ module WithCred
   def self.entials_for(file)
 
     # This method ignores the block if the credentials are required, and we are not supposed to need them.
-    # Passes the credentials into the block as read from the credentials YAML file at "#{Rails.root}/credentials/#{file}.yaml"
+    # Passes the credentials into the block as read from the credentials YAML file at "#{::Rails.root}/credentials/#{file}.yaml"
 
     if (allowed = (self.credentials_mode == "production"))
 
