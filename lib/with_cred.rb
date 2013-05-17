@@ -11,7 +11,9 @@ module WithCred
 
   if defined?(::Rails)
     def self.credentials_mode
-      ::Rails.application.config.credentials_mode
+      if ::Rails.application.config.respond_to?(:credentials_mode)
+        ::Rails.application.config.credentials_mode
+      end
     end
 
     def self.credentials_dir
