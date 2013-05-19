@@ -1,12 +1,17 @@
 require "with_cred/version"
+require "with_cred/deployment"
 require "with_cred/railtie" if defined?(::Rails)
 require "with_cred/capistrano" if defined?(::Capistrano)
+require "base64"
+require "encryptor"
 
 class CredentialsNotFoundError < StandardError ; end
 
 module WithCred
 
-  # Config that we inherit from rails
+  class InvalidCredentialsError < StandardError ; end
+
+  # Config that we inherit from rails, and its replacement if we don't have Rails
   def self.credentials_dir=(foo)
     @@credentials_dir = foo
   end
@@ -36,7 +41,20 @@ module WithCred
   end
   self.credentials_hash = {}
 
+  def self.encrypted
+    password = ENV['PASSWORD']
+    Base64.encode64(Encryptor.encrypt(self.credentials_hash.to_yaml, :key => password, :algorithm => 'aes-256-cbc'))
+  end
+
   def self.add_from_environment_vars
+
+    password = ENV['PASSWORD']
+    encrypted = ENV['ENCRYPTED_CREDENTIALS']
+
+    if password && encrypted
+      yaml = Encryptor.decrypt(Base64.decode64(encrypted), :key => password, :algorithm => 'aes-256-cbc')
+      self.credentials_hash = self.credentials_hash.merge(YAML::load(yaml))
+    end
   end
 
   def self.add_from_files
@@ -70,6 +88,18 @@ module WithCred
 
     twig[key.to_sym] = leaf
 
+  end
+
+  def self.check!
+    unless Digest::SHA256.hexdigest(Base64.decode64(self.encrypted)) == File.read(File.join(self.credentials_dir, 'credentials.lock'))
+      raise InvalidCredentialsError.new('Fingerprint does not match')
+    end
+  end
+
+  def self.lock
+    File.open(File.join(self.credentials_dir, 'credentials.lock'), 'w') do |f|
+      f.write Digest::SHA256.hexdigest(Base64.decode64(self.encrypted))
+    end
   end
 
   def self.entials_for(*hash_path)

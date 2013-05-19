@@ -4,4 +4,5 @@ source 'https://rubygems.org'
 gemspec
 gem 'rspec'
 gem 'pry'
+gem 'encryptor'
 eval File.read(File.expand_path('../spec/dummy/Gemfile', __FILE__))

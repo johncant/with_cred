@@ -4,10 +4,8 @@ require 'spec_helper'
 describe WithCred do
 
   context "in a rails app" do
-    context "config" do
-      it "configures based on credentials_mode" do
-        WithCred.credentials_mode.should == "development"
-      end
+    before do
+      WithCred.add_from_files
     end
 
     context "credentials from yaml files" do
@@ -38,5 +36,6 @@ describe WithCred do
         end
       end
     end
+
   end
 end
