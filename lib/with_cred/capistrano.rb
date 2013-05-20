@@ -1,23 +1,23 @@
-module Capistrano::Configuration::Namespace::Namespace
-def with_credentials_run(*args)
-  pwd = WithCred::Deployment.password
-  cred = WithCred::Deployment.encrypted_credentials
+# Can't figure out how to require this file only for capistrano tasks.
+# It's not required by default, so feel free to copypasta
 
-  if pwd
-    args[0] = "ENCRYPTED_CREDENTIALS='#{cred}' #{args[0]}"
+Capistrano::Configuration.instance(:must_exist).load do
+
+  def with_credentials_run(*args)
+    pwd = ENV['PASSWORD']
+    cred = WithCred.encrypted
+
+    if pwd
+      args[0] = "ENCRYPTED_CREDENTIALS='#{cred}' ; #{args[0]}"
+    end
+
+    if cred
+      args[0] = "PASSWORD='#{pwd}' ; #{args[0]}"
+    end
+
+    run(*args)
   end
 
-  if cred
-    args[0] = "PASSWORD='#{pwd}' #{args[0]}"
-  end
-
-  args[0] = "export #{args[0]}"
-
-  run(*args)
-end
-end
-
-Capistrano::Configuration.instance.load do
 
   namespace :credentials do
     desc "ask for credentials password"
@@ -28,7 +28,7 @@ Capistrano::Configuration.instance.load do
     desc "check"
     task :check do
       credentials.password_prompt
-      WithCred.check!
+      with_credentials_run "bundle exec rake credentials:check"
     end
 
     desc "lock"

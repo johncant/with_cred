@@ -7,7 +7,8 @@ can commit them into your SCM/VCS, but this is not recommended.
 them into your SCM/VCS
 3) An encrypted environment variable and a password. This gem helps you
 encrypt your credentials on deployment with capistrano and run commands
-with the credentials as environment variables.
+with the credentials as environment variables. The credentials may never
+be persistently stored.
 
 ## Installation
 
@@ -45,16 +46,30 @@ put your yaml in credentials/
 Tasks
 ```
 # Decrypt, asking for password
+```
 rake credentials:decrypt
 
 # Decrypt, Looking in the file /etc/yourapp/.secret for the password
+```
 rake credentials:decrypt[/etc/yourapp/.secret]
 
 # Encrypt, asking for the password
+```
 rake credentials:encrypt
 
 # Encrypt, Looking in the file /etc/yourapp/.secret for the password
-rake credentials:encrypt[/etc/yourapp/.secret]
+```
+rake [[credentials:encrypt[/etc/yourapp/.secret]]]
+
+# Output a lockfile, for credentials compatability checking. Use the
+  lockfile to check compatability of credentials with the app. Check
+this file into your VCS/SCM.
+```
+rake credentials:lock
+
+# Check that the credentials match what we expect from the lockfile.
+```
+rake credentials:check
 
 ## Contributing
 

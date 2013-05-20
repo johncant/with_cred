@@ -5,7 +5,11 @@ describe WithCred do
 
   context "in a rails app" do
     before do
-      WithCred.add_from_files
+      WithCred.configure
+    end
+
+    after do
+      WithCred.deconfigure
     end
 
     context "credentials from yaml files" do
@@ -25,6 +29,10 @@ describe WithCred do
 
       it "ignores credentials for other environments" do
         Rails.application.config.stub(:credentials_mode).and_return("production")
+
+        WithCred.deconfigure
+        WithCred.configure
+
         WithCred.entials_for(:twitter) do |c|
           c.should be_empty
         end

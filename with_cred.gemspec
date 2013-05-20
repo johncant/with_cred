@@ -9,11 +9,13 @@ Gem::Specification.new do |gem|
   gem.authors       = ["John Cant"]
   gem.email         = ["a.johncant@gmail.com"]
   gem.description   = %q{Simple credentials storage}
-  gem.summary       = %q{bla}
+  gem.summary       = %q{Credentials as environment variables or as files}
   gem.homepage      = "https://github.com/johncant/with_cred"
 
   gem.files         = `git ls-files`.split($/)
   gem.executables   = gem.files.grep(%r{^bin/}).map{ |f| File.basename(f) }
   gem.test_files    = gem.files.grep(%r{^(test|spec|features)/})
   gem.require_paths = ["lib"]
+
+  gem.add_dependency 'encryptor'
 end

@@ -18,14 +18,19 @@ describe WithCred do
       }.to_yaml
     }
     let(:encrypted_credentials) {
-      Base64.encode64(Encryptor.encrypt(credentials, :key => password, :algorithm => 'aes-256-cbc'))
+      Base64.urlsafe_encode64(Encryptor.encrypt(credentials, :key => password, :algorithm => 'aes-256-cbc'))
     }
 
     before do
       ENV['ENCRYPTED_CREDENTIALS'] = encrypted_credentials
       ENV['PASSWORD'] = password
 
-      WithCred.add_from_environment_vars
+      # Simulate process reload
+      WithCred.configure
+    end
+
+    after do
+      WithCred.deconfigure
     end
 
     it "decrypts the credentials" do

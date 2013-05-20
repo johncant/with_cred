@@ -1,7 +1,7 @@
 require "with_cred/version"
 require "with_cred/deployment"
 require "with_cred/railtie" if defined?(::Rails)
-require "with_cred/capistrano" if defined?(::Capistrano)
+#require "with_cred/capistrano" if defined?(::Capistrano)
 require "base64"
 require "encryptor"
 
@@ -11,105 +11,154 @@ module WithCred
 
   class InvalidCredentialsError < StandardError ; end
 
-  # Config that we inherit from rails, and its replacement if we don't have Rails
-  def self.credentials_dir=(foo)
-    @@credentials_dir = foo
-  end
+  class Configuration
+    attr_accessor :credentials_dir, :credententials_mode, :credentials_hash, :password
 
-  if defined?(::Rails)
-    def self.credentials_mode
-      if ::Rails.application.config.respond_to?(:credentials_mode)
-        ::Rails.application.config.credentials_mode
+    def initialize
+      @algorithm = 'aes-256-cbc'
+      @credentials_hash = {}
+    end
+
+    def add_from_encrypted(ciphertext)
+      if ciphertext
+        encrypted_binary = Base64.urlsafe_decode64(ciphertext)
+        decrypted_yaml = Encryptor.decrypt(encrypted_binary, :key => @password, :algorithm => @algorithm)
+        decrypted_hash = YAML::load(decrypted_yaml)
+        @credentials_hash.merge!(decrypted_hash)
       end
     end
 
-    def self.credentials_dir
-      @@credentials_dir ||= File.join(::Rails.root, 'credentials')
-    end
-  else
-    def self.credentials_mode
-      "production"
+    def encrypted
+      Base64.urlsafe_encode64(encrypted_binary)
     end
 
-    def self.credentials_dir
-      @@credentials_dir ||= File.join(ENV["PWD"], 'credentials')
+    def encrypted_binary
+      Encryptor.encrypt(@credentials_hash.to_yaml, :key => @password, :algorithm => @algorithm)
     end
+
+    def check!(fp)
+      check(fp) || raise(InvalidCredentialsError.new("The fingerprints do not match"))
+    end
+
+    def check(fp)
+      fingerprint == fp
+    end
+
+    def fingerprint
+      Digest::SHA256.hexdigest(Base64.urlsafe_decode64(encrypted))
+    end
+
+    def add_credentials(path = [], leaf = {})
+
+      key = path.pop
+
+      twig = path.inject(@credentials_hash) do |hash, key|
+        hash[key.to_sym] ||= {}
+      end
+
+      twig[key.to_sym] = leaf
+
+    end
+
+    def credentials_for_mode(mode)
+      our_mode_credentials = @credentials_hash[mode.to_sym] || {}
+      all_mode_credentials = @credentials_hash[:_all] || {}
+      all_mode_credentials.merge(our_mode_credentials)
+    end
+
+  end
+
+  class ApplicationConfiguration < Configuration
+
+    attr_accessor :credentials_dir, :credentials_mode
+
+    def initialize
+
+      super
+      if defined?(::Rails)
+        @src_root = ::Rails.root
+      else
+        @src_root = ENV['PWD']
+      end
+
+      if defined?(::Rails) && ::Rails.application.config.respond_to?(:credentials_mode)
+        @credentials_mode = ::Rails.application.config.credentials_mode
+      else
+        @credentials_mode = "production"
+      end
+
+      @credentials_dir = File.join(@src_root, 'credentials')
+
+      self.password = ENV['PASSWORD']
+      self.add_from_encrypted(ENV['ENCRYPTED_CREDENTIALS'])
+      add_from_files
+
+    end
+
+    def add_from_files
+      all_credentials_files = Dir[File.join(@credentials_dir, "**", "*.yaml")]
+
+      all_credentials_files.each do |path|
+
+        hash_path =
+          path.gsub(/\.[^\.]*$/, '').
+          gsub(/^#{self.credentials_dir}/, '').
+          split('/').
+          reject{|tok| tok.length == 0}
+
+        if File.join(File.dirname(path), "") == File.join(self.credentials_dir, "")
+          hash_path.unshift(:_all)
+        end
+
+        credentials = YAML::load_file(path)
+
+        add_credentials(hash_path, credentials)
+      end
+    end
+
+    def check!(fp = nil)
+      super(fp || File.read(lock_file_name))
+    end
+
+    def lock
+      File.open(lock_file_name, 'w') do |f|
+        f.write fingerprint
+      end
+    end
+
+    def credentials_for_current_mode
+      credentials_for_mode(@credentials_mode)
+    end
+
+    private
+    def lock_file_name
+      File.join(@src_root, 'credentials.lock')
+    end
+
   end
 
   class << self
-    attr_accessor :credentials_hash
-  end
-  self.credentials_hash = {}
+    attr_accessor :application_config
 
-  def self.encrypted
-    password = ENV['PASSWORD']
-    Base64.encode64(Encryptor.encrypt(self.credentials_hash.to_yaml, :key => password, :algorithm => 'aes-256-cbc'))
-  end
-
-  def self.add_from_environment_vars
-
-    password = ENV['PASSWORD']
-    encrypted = ENV['ENCRYPTED_CREDENTIALS']
-
-    if password && encrypted
-      yaml = Encryptor.decrypt(Base64.decode64(encrypted), :key => password, :algorithm => 'aes-256-cbc')
-      self.credentials_hash = self.credentials_hash.merge(YAML::load(yaml))
-    end
-  end
-
-  def self.add_from_files
-    all_credentials_files = Dir[File.join(self.credentials_dir, "**", "*.yaml")]
-
-    all_credentials_files.each do |path|
-
-      hash_path =
-        path.gsub(/\.[^\.]*$/, '').
-        gsub(/^#{self.credentials_dir}/, '').
-        split('/').
-        reject{|tok| tok.length == 0}
-
-      if File.join(File.dirname(path), "") == File.join(self.credentials_dir, "")
-        hash_path.unshift(:_all)
+    [:encrypted, :check!, :lock].each do |m|
+      define_method m do |*args, &block|
+        self.application_config.public_send(m, *args, &block)
       end
-
-      credentials = YAML::load_file(path)
-
-      self.add_credentials(hash_path, credentials)
     end
   end
 
-  def self.add_credentials(path = [], leaf = {})
-
-    key = path.pop
-
-    twig = path.inject(self.credentials_hash) do |hash, key|
-      hash[key.to_sym] ||= {}
-    end
-
-    twig[key.to_sym] = leaf
-
+  def self.configure
+    self.application_config ||= ApplicationConfiguration.new
+    yield application_config if block_given?
   end
 
-  def self.check!
-    unless Digest::SHA256.hexdigest(Base64.decode64(self.encrypted)) == File.read(File.join(self.credentials_dir, 'credentials.lock'))
-      raise InvalidCredentialsError.new('Fingerprint does not match')
-    end
-  end
-
-  def self.lock
-    File.open(File.join(self.credentials_dir, 'credentials.lock'), 'w') do |f|
-      f.write Digest::SHA256.hexdigest(Base64.decode64(self.encrypted))
-    end
+  def self.deconfigure
+    self.application_config = nil
   end
 
   def self.entials_for(*hash_path)
 
-    # This method ignores the block if the credentials are required, and we are not supposed to need them.
-    # Passes the credentials into the block as read from the credentials YAML file at "#{::Rails.root}/credentials/#{file}.yaml"
-
-    our_mode_credentials = self.credentials_hash[self.credentials_mode.to_sym] || {}
-    all_mode_credentials = self.credentials_hash[:_all] || {}
-    hash_place = all_mode_credentials.merge(our_mode_credentials)
+    hash_place = application_config.credentials_for_current_mode
 
     # Delve
     hash_path.each do |key|
@@ -118,9 +167,9 @@ module WithCred
       hash_place = hash_place[key]
     end
 
-    raise(CredentialsNotFoundError) unless hash_place
     yield hash_place
 
   end
+
 end
 

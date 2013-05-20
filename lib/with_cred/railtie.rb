@@ -8,8 +8,7 @@ module WithCred
       end
 
       config.before_configuration do
-        WithCred.add_from_environment_vars
-        WithCred.add_from_files
+        WithCred.configure
       end
     end
   end

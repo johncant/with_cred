@@ -21,11 +21,21 @@ namespace :credentials do
   end
 
   desc "Encrypt for use as an environment variable"
-  task "env_encrypt" do |t, args|
+  task :env_encrypt do |t, args|
     password = ENV['PASSWORD']
     raise "Please supply a password as an environment variable" unless password
 
     puts WithCred.encrypted
+  end
+
+  desc "Check that the environment variable credentials are correct"
+  task :check => :environment do
+    WithCred.check!
+  end
+
+  desc "Output a lockfile unique to the credentials set"
+  task :lock => :environment do
+    WithCred.lock
   end
 
 end
