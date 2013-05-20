@@ -36,8 +36,6 @@ module WithCred
     end
 
     def check!(fp)
-      require 'pry'
-      binding.pry
       check(fp) || raise(InvalidCredentialsError.new("The fingerprints do not match"))
     end
 
