@@ -1,5 +1,4 @@
 require "with_cred/version"
-require "with_cred/deployment"
 require "with_cred/railtie" if defined?(::Rails)
 #require "with_cred/capistrano" if defined?(::Capistrano)
 require "base64"
@@ -20,7 +19,7 @@ module WithCred
     end
 
     def add_from_encrypted(ciphertext)
-      if ciphertext
+      if ciphertext && ciphertext.length > 0
         encrypted_binary = Base64.urlsafe_decode64(ciphertext)
         decrypted_yaml = Encryptor.decrypt(encrypted_binary, :key => @password, :algorithm => @algorithm)
         decrypted_hash = YAML::load(decrypted_yaml)
@@ -33,10 +32,12 @@ module WithCred
     end
 
     def encrypted_binary
-      Encryptor.encrypt(@credentials_hash.to_yaml, :key => @password, :algorithm => @algorithm)
+      Encryptor.encrypt(sorted_credentials_hash.to_yaml, :key => @password, :algorithm => @algorithm)
     end
 
     def check!(fp)
+      require 'pry'
+      binding.pry
       check(fp) || raise(InvalidCredentialsError.new("The fingerprints do not match"))
     end
 
@@ -66,6 +67,21 @@ module WithCred
       all_mode_credentials.merge(our_mode_credentials)
     end
 
+    def sorted_credentials_hash
+      def sorter(h)
+        result = {}
+        h.keys.sort.each do |k|
+          if h[k].is_a?(Hash)
+            result[k] = sorter(h[k])
+          else
+            result[k] = h[k]
+          end
+        end
+        result
+      end
+
+      sorter(@credentials_hash)
+    end
   end
 
   class ApplicationConfiguration < Configuration
