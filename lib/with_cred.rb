@@ -40,7 +40,13 @@ module WithCred
     end
 
     def check(fp)
-      fingerprint == fp
+      if fp.is_a?(Array)
+        fp.each do |fp|
+          check(fp)
+        end
+      else
+        fingerprint == fp
+      end
     end
 
     def fingerprint
@@ -95,13 +101,9 @@ module WithCred
         @src_root = ENV['PWD']
       end
 
-      if defined?(::Rails) && ::Rails.application.config.respond_to?(:credentials_mode)
-        @credentials_mode = ::Rails.application.config.credentials_mode
-      else
-        @credentials_mode = "production"
-      end
-
       @credentials_dir = File.join(@src_root, 'credentials')
+
+      @credentials_mode = ENV['CREDENTIALS_MODE'] || "development"
 
       self.password = ENV['PASSWORD']
       self.add_from_encrypted(ENV['ENCRYPTED_CREDENTIALS'])
@@ -131,13 +133,14 @@ module WithCred
     end
 
     def check!(fp = nil)
-      super(fp || File.read(lock_file_name))
+      super(fp || YAML::load(File.read(lock_file_name)))
     end
 
     def lock
-      File.open(lock_file_name, 'w') do |f|
-        f.write fingerprint
-      end
+      puts "Add this to your credentials lockfile: #{fingerprint}"
+#      File.open(lock_file_name, 'w') do |f|
+#        f.write fingerprint
+#      end
     end
 
     def credentials_for_current_mode
